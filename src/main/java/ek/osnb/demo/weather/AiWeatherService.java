@@ -1,33 +1,30 @@
 package ek.osnb.demo.weather;
 
 
+import ek.osnb.demo.ai.AiClient;
+import ek.osnb.demo.ai.AiRequest;
+import ek.osnb.demo.ai.AiResponse;
 import ek.osnb.demo.weather.geoapi.GeocodingClient;
-import ek.osnb.demo.weather.openai.OpenAiChatClient;
-import ek.osnb.demo.weather.weatherapi.WeatherClient;
 import ek.osnb.demo.weather.geoapi.Location;
-import ek.osnb.demo.weather.openai.request.OpenAiModel;
-import ek.osnb.demo.weather.openai.request.OpenAiRequest;
-import ek.osnb.demo.weather.openai.response.OpenAiContent;
-import ek.osnb.demo.weather.openai.response.OpenAiResponse;
+import ek.osnb.demo.weather.weatherapi.WeatherClient;
 import ek.osnb.demo.weather.weatherapi.WeatherResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 
 @Service
 public class AiWeatherService {
     private static final Logger log = LoggerFactory.getLogger(AiWeatherService.class);
-    private final OpenAiChatClient openAiClient;
+    private final AiClient aiClient;
     private final GeocodingClient geoClient;
     private final WeatherClient weatherClient;
 
     private final Integer MAX_OUTPUT_TOKENS = 800;
+
     private static final String FALLBACK_MESSAGE = "I'm sorry, I can't help you with that.";
     private static final String CITY_EXTRACTION_INSTRUCTIONS = """
             Extract the city from the user's message.
@@ -54,8 +51,8 @@ public class AiWeatherService {
             - Keep the answer concise and user-friendly.
             """;
 
-    public AiWeatherService(OpenAiChatClient openAiClient, GeocodingClient geoClient, WeatherClient weatherClient) {
-        this.openAiClient = openAiClient;
+    public AiWeatherService(AiClient aiClient, GeocodingClient geoClient, WeatherClient weatherClient) {
+        this.aiClient = aiClient;
         this.geoClient = geoClient;
         this.weatherClient = weatherClient;
     }
@@ -92,21 +89,20 @@ public class AiWeatherService {
 
             String enrichedInput = buildEnrichedInput(prompt, city.get(), weather);
 
-            var request = new OpenAiRequest(
-                    OpenAiModel.GPT_4_1,
+            AiRequest request = new AiRequest(
                     enrichedInput,
                     ANSWER_INSTRUCTIONS,
-                    MAX_OUTPUT_TOKENS);
+                    MAX_OUTPUT_TOKENS
+            );
 
-            log.debug("Sending weather answer request to OpenAI for city={}, prompt={}", city.get(), prompt);
-            OpenAiResponse aiResponse = openAiClient.getResponse(request);
-            String text = extractText(aiResponse);
+            log.debug("Sending weather answer request to AI for city={}, prompt={}", city.get(), prompt);
+            AiResponse aiResponse = aiClient.generate(request);
 
-            if (!StringUtils.hasText(text)) {
+            if (!StringUtils.hasText(aiResponse.text())) {
                 return new ResponseDto(FALLBACK_MESSAGE);
             }
 
-            return new ResponseDto(text.trim());
+            return new ResponseDto(aiResponse.text().trim());
         } catch (Exception ex) {
             log.error("Error processing prompt: {}", prompt, ex);
             return new ResponseDto(FALLBACK_MESSAGE);
@@ -114,49 +110,18 @@ public class AiWeatherService {
     }
 
     private Optional<String> extractCityFromPrompt(String prompt) {
-//        String instructions = """
-//                Extract the city name from the following user question.
-//                If no city name is mentioned, respond with "No city mentioned".
-//                If there are a city name mentioned, responsd with only the city name, without any additional text or formatting.
-//                """;
-        var request = new OpenAiRequest(
-                OpenAiModel.GPT_4_1,
+        var request = new AiRequest(
                 prompt,
                 CITY_EXTRACTION_INSTRUCTIONS,
                 50
         );
-        OpenAiResponse response = openAiClient.getResponse(request);
-        String extracted = extractText(response).trim();
-        if (!StringUtils.hasText(extracted) || "NONE".equalsIgnoreCase(extracted)) {
+        AiResponse response = aiClient.generate(request);
+
+        if (!StringUtils.hasText(response.text()) || "NONE".equalsIgnoreCase(response.text())) {
             return Optional.empty();
         }
 
-        return Optional.of(extracted);
-    }
-
-
-    private ResponseDto toDto(OpenAiResponse response) {
-        String text = response.output().stream()
-                .flatMap(output -> output.content().stream())
-                .map(OpenAiContent::text)
-                .filter(Objects::nonNull)
-                .collect(Collectors.joining("\n"));
-
-        return new ResponseDto(text);
-    }
-
-    private String extractText(OpenAiResponse response) {
-        if (response == null || response.output() == null) {
-            return "";
-        }
-
-        return response.output().stream()
-                .filter(Objects::nonNull)
-                .flatMap(output -> output.content().stream())
-                .filter(Objects::nonNull)
-                .map(OpenAiContent::text)
-                .filter(StringUtils::hasText)
-                .collect(Collectors.joining("\n"));
+        return Optional.of(response.text());
     }
 
     private String buildEnrichedInput(String userPrompt, String city, WeatherResponse weather) {
