@@ -21,8 +21,8 @@ class RestClientConfig {
     @Bean
     RestClient openAiRestClient(
             RestClient.Builder builder,
-            @Value("${chatgpt.api.key}") String apiKey,
-            @Value("${chatgpt.api.baseUrl}") String baseUrl
+            @Value("${app.ai.openai.apiKey}") String apiKey,
+            @Value("${app.ai.openai.baseUrl}") String baseUrl
     ) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalArgumentException("OpenAI API-key must be provided in application.properties");
@@ -41,7 +41,7 @@ class RestClientConfig {
     @Bean
     RestClient weatherRestClient(
             RestClient.Builder b,
-            @Value("${weather.api.baseUrl}") String baseUrl
+            @Value("${external.api.weather.baseUrl}") String baseUrl
     ) {
 
         if (baseUrl == null || baseUrl.isBlank()) {
@@ -56,7 +56,7 @@ class RestClientConfig {
     @Bean
     RestClient geoCodingRestClient(
             RestClient.Builder b,
-            @Value("${geocoding.api.baseUrl}") String baseUrl
+            @Value("${external.api.geocoding.baseUrl}") String baseUrl
     ) {
 
         if (baseUrl == null || baseUrl.isBlank()) {
