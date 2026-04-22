@@ -16,7 +16,6 @@ Behind the scenes, the backend:
 
 ---
 
-
 ### Key Packages
 
 | Package | Responsibility |
@@ -237,23 +236,6 @@ docker compose up -d
 Open your browser at `http://localhost`.
 
 > nginx serves the static frontend files and proxies API requests to the Spring Boot backend.
-
----
-
-## Testing the API Directly
-
-You can also call the API without the frontend using the included HTTP file `http/prompt.http`, or with curl:
-
-```bash
-# 1. Log in and save the session cookie
-curl -c cookies.txt -X POST http://localhost:8080/api/login \
-  -d "username=user&password=pw"
-
-# 2. Send a prompt
-curl -b cookies.txt -X POST http://localhost:8080/api/prompt \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "What is the weather like in Copenhagen?"}'
-```
 
 ---
 
