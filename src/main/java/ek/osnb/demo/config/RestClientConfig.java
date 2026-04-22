@@ -19,26 +19,6 @@ class RestClientConfig {
     }
 
     @Bean
-    RestClient openAiRestClient(
-            RestClient.Builder builder,
-            @Value("${app.ai.openai.apiKey}") String apiKey,
-            @Value("${app.ai.openai.baseUrl}") String baseUrl
-    ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalArgumentException("OpenAI API-key must be provided in application.properties");
-        }
-
-        if (baseUrl == null || baseUrl.isBlank()) {
-            throw new IllegalArgumentException("OpenAI API baseUrl must be provided in application.properties");
-        }
-
-        return builder.clone()
-                .baseUrl(baseUrl)
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
-                .build();
-    }
-
-    @Bean
     RestClient weatherRestClient(
             RestClient.Builder b,
             @Value("${external.api.weather.baseUrl}") String baseUrl

@@ -1,20 +1,21 @@
 package ek.osnb.demo.ai.openai;
 
 import ek.osnb.demo.ai.AiClient;
+import ek.osnb.demo.ai.AiProperties;
 import ek.osnb.demo.ai.AiRequest;
 import ek.osnb.demo.ai.AiResponse;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.Objects;
 
 @Service
-@EnableConfigurationProperties(OpenAiProperties.class)
+@ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "openai")
 class OpenAiClient implements AiClient {
     private final OpenAiApi openAiApi;
-    private final OpenAiProperties properties;
+    private final AiProperties properties;
 
-    OpenAiClient(OpenAiApi openAiApi, OpenAiProperties properties) {
+    OpenAiClient(OpenAiApi openAiApi, AiProperties properties) {
         this.openAiApi = openAiApi;
         this.properties = properties;
     }
