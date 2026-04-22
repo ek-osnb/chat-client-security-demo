@@ -208,7 +208,7 @@ All endpoints require authentication. If you are not logged in, you get `401 Una
 ## Setup & Running
 
 ### Prerequisites
-- Java 21+
+- Java 25
 - Maven (or use the included `./mvnw`)
 - Docker (for Nginx frontend)
 - An OpenAI API key
