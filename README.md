@@ -41,10 +41,49 @@ Spring Boot (port 8080)
 | `security` | Spring Security config — login, logout, session |
 | `user` | `/api/user` endpoint — who is logged in |
 | `weather` | Main feature: controller, service, and all external API clients |
-| `weather/openai` | OpenAI REST API client and request/response model |
+| `ai` | `AiClient` interface, `AiProperties` config, and `AiRequest`/`AiResponse` models |
+| `ai/openai` | OpenAI implementation of `AiClient` — REST client and request/response models |
 | `weather/geoapi` | Geocoding client (city → coordinates) |
 | `weather/weatherapi` | Weather data client (coordinates → weather) |
-| `config` | Spring `RestClient` beans with base URLs and auth headers |
+| `config` | Shared `RestClient.Builder` bean and weather/geocoding `RestClient` beans |
+
+---
+
+## AI Provider Abstraction
+
+The application uses an **`AiClient` interface** to decouple the weather service from any specific AI provider:
+
+```java
+public interface AiClient {
+    AiResponse generate(AiRequest request);
+}
+```
+
+The active provider is selected via the `app.ai.provider` property. Each implementation uses `@ConditionalOnProperty` so only the matching bean is loaded at startup:
+
+```java
+@Service
+@ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "openai")
+class OpenAiClient implements AiClient { ... }
+```
+
+### Adding a New Provider
+
+To add a new provider (e.g. Gemini):
+
+1. Create a new package, e.g. `ai/gemini/`.
+2. Implement `AiClient` and annotate it:
+   ```java
+   @Service
+   @ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "gemini")
+   class GeminiClient implements AiClient { ... }
+   ```
+3. Set the provider in `application.properties`:
+   ```properties
+   app.ai.provider=gemini
+   ```
+
+No other code needs to change — `AiWeatherService` injects `AiClient` and is unaware of which provider is active.
 
 ---
 
@@ -96,11 +135,11 @@ The project uses Java **records** to model the request and response directly:
 
 **Request** → `OpenAiRequest.java`
 ```java
-public record OpenAiRequest(
-    OpenAiModel model,          // which AI model to use
-    String input,               // the user's message / question
-    String instructions,        // system-level rules for the AI
-    Integer max_output_tokens   // limit how long the response can be
+record OpenAiRequest(
+    String model,                                   // which AI model to use
+    String input,                                   // the user's message / question
+    String instructions,                            // system-level rules for the AI
+    @JsonProperty("max_output_tokens") Integer maxOutputTokens  // limit response length
 ) {}
 ```
 
@@ -116,20 +155,20 @@ OpenAiResponse
 
 ### How the HTTP Call is Made
 
-Spring's `RestClient` handles the HTTP call in `OpenAiClient.java`:
+Spring's `RestClient` handles the HTTP call in `OpenAiApi.java`:
 
 ```java
 return client.post()
-    .uri("/responses")
+    .uri("/v1/responses")
     .contentType(MediaType.APPLICATION_JSON)
     .body(request)               // Java record → JSON (Jackson)
     .retrieve()
     .body(OpenAiResponse.class); // JSON → Java record (Jackson)
 ```
 
-Jackson automatically converts between the Java records and JSON — the field names in the records match the JSON keys exactly.
+Jackson automatically converts between the Java records and JSON — `@JsonProperty("max_output_tokens")` maps the camelCase Java field to the snake_case JSON key.
 
-The `Authorization: Bearer ...` header is added once in `RestClientConfig.java` for all requests — you never need to set it per call.
+The `Authorization: Bearer ...` header is set once in `OpenAiApi.java` when the `RestClient` is constructed — you never need to set it per call. The shared `RestClientConfig` only handles the weather and geocoding clients.
 
 ---
 
@@ -240,9 +279,16 @@ curl -b cookies.txt -X POST http://localhost:8080/api/prompt \
 All external URLs and the API key are configured in `src/main/resources/application.properties`:
 
 ```properties
-chatgpt.api.key=${OPENAI_API_KEY}        # loaded from environment variable
-chatgpt.api.baseUrl=https://api.openai.com/v1
-weather.api.baseUrl=https://api.open-meteo.com/v1
-geocoding.api.baseUrl=https://geocoding-api.open-meteo.com/v1
+# AI provider selection — swap value to switch provider
+app.ai.provider=openai
+app.ai.model=gpt-4.1
+app.ai.max-output-tokens=800
+app.ai.base-url=https://api.openai.com
+app.ai.api-key=${OPENAI_API_KEY}        # loaded from environment variable
+
+# External weather and geocoding APIs
+external.api.weather.baseUrl=https://api.open-meteo.com/v1
+external.api.geocoding.baseUrl=https://geocoding-api.open-meteo.com/v1
 ```
 
+All `app.ai.*` properties are bound to `AiProperties.java` via `@ConfigurationProperties(prefix = "app.ai")`.
