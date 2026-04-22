@@ -1,4 +1,4 @@
-# OpenAI Client Security Demo
+# AI Chat Client Security Demo
 
 A Spring Boot demo application that shows how to call the OpenAI REST API from a backend service — with session-based security, a vanilla JS frontend, and a multi-step flow that combines three external APIs.
 
@@ -16,23 +16,6 @@ Behind the scenes, the backend:
 
 ---
 
-## Architecture Overview
-
-```
-Browser (Vanilla JS)
-        │
-        │  HTTP (session cookie)
-        ▼
-   Nginx (port 80)          ← serves static frontend files
-        │
-        │  reverse proxy /api/*
-        ▼
-Spring Boot (port 8080)
-        │
-        ├──▶ OpenAI API          (city extraction + answer generation)
-        ├──▶ Open-Meteo Geocoding API    (city → lat/lon)
-        └──▶ Open-Meteo Weather API      (lat/lon → weather data)
-```
 
 ### Key Packages
 
