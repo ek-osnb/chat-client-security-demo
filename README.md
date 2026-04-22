@@ -1,6 +1,6 @@
 # AI Chat Client Security Demo
 
-A Spring Boot demo application that shows how to call the OpenAI REST API from a backend service — with session-based security, a vanilla JS frontend, and a multi-step flow that combines three external APIs.
+A Spring Boot demo application that shows how to call an AI REST API from a backend service — with session-based security, a vanilla JS frontend, and a multi-step flow that combines three external APIs.
 
 ---
 
@@ -9,10 +9,10 @@ A Spring Boot demo application that shows how to call the OpenAI REST API from a
 A user types a weather question — *"What is the weather like in Copenhagen right now?"* — and gets an AI-generated answer backed by real weather data.
 
 Behind the scenes, the backend:
-1. Uses OpenAI to **extract the city** from the user's question.
+1. Uses an AI provider to **extract the city** from the user's question.
 2. Calls a **geocoding API** to get the latitude/longitude of that city.
 3. Calls a **weather API** to get the actual current weather data.
-4. Sends that weather data back to OpenAI to **compose a user-friendly answer**.
+4. Sends that weather data back to the AI to **compose a user-friendly answer**.
 
 ---
 
@@ -25,6 +25,7 @@ Behind the scenes, the backend:
 | `weather` | Main feature: controller, service, and all external API clients |
 | `ai` | `AiClient` interface, `AiProperties` config, and `AiRequest`/`AiResponse` models |
 | `ai/openai` | OpenAI implementation of `AiClient` — REST client and request/response models |
+| `ai/ollama` | Ollama implementation of `AiClient` — REST client and request/response models |
 | `weather/geoapi` | Geocoding client (city → coordinates) |
 | `weather/weatherapi` | Weather data client (coordinates → weather) |
 | `config` | Shared `RestClient.Builder` bean and weather/geocoding `RestClient` beans |
@@ -47,6 +48,10 @@ The active provider is selected via the `app.ai.provider` property. Each impleme
 @Service
 @ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "openai")
 class OpenAiClient implements AiClient { ... }
+
+@Service
+@ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "ollama")
+class OllamaClient implements AiClient { ... }
 ```
 
 ### Adding a New Provider
@@ -66,6 +71,70 @@ To add a new provider (e.g. Gemini):
    ```
 
 No other code needs to change — `AiWeatherService` injects `AiClient` and is unaware of which provider is active.
+
+---
+
+## Ollama — Local AI via Docker
+
+[Ollama](https://ollama.com) lets you run AI models locally. In this project, Ollama runs as a Docker container and is called over HTTP — no API key required.
+
+### How It Works
+
+`OllamaApi.java` sends a `POST` request to Ollama's `/api/chat` endpoint:
+
+```
+POST http://localhost:11434/api/chat
+Content-Type: application/json
+```
+
+With a JSON body like this:
+
+```json
+{
+  "model": "llama3.2",
+  "messages": [
+    { "role": "system", "content": "You are a weather assistant..." },
+    { "role": "user",   "content": "What is the weather like in Copenhagen?" }
+  ],
+  "stream": false
+}
+```
+
+And you get back something like:
+
+```json
+{
+  "message": {
+    "role": "assistant",
+    "content": "It is currently 12°C in Copenhagen with light winds."
+  }
+}
+```
+
+### How This Maps to Java
+
+**Request** → `OllamaRequest.java`
+```java
+record OllamaRequest(
+    String model,
+    List<OllamaMessage> messages,
+    boolean stream       // set to false to get a single complete response
+) {}
+```
+
+**Message** → `OllamaMessage.java`
+```java
+record OllamaMessage(String role, String content) {}
+```
+
+**Response** → `OllamaResponse.java`
+```java
+record OllamaResponse(OllamaMessage message) {}
+```
+
+### First Request May Return a 404
+
+When Ollama starts for the first time, it needs to **pull the model** (e.g. `llama3.2`) from the registry. During this time, the model is not yet available, and API calls will return `404 Not Found`. This is expected behavior — just wait a few minutes and try again.
 
 ---
 
@@ -209,15 +278,16 @@ All endpoints require authentication. If you are not logged in, you get `401 Una
 ### Prerequisites
 - Java 25
 - Maven (or use the included `./mvnw`)
-- Docker (for Nginx frontend)
-- An OpenAI API key
+- Docker (for Nginx frontend and Ollama)
+- An OpenAI API key *(only required when using the OpenAI provider)*
 
-### 1. Set Your API Key
+### 1. Set Your API Key *(OpenAI only)*
 
 ```bash
 export OPENAI_API_KEY=sk-...
 ```
 > Or set it in IntelliJ run configuration environment variables.
+> Skip this step if you are using Ollama.
 
 ### 2. Start the Backend
 
@@ -236,22 +306,37 @@ docker compose up -d
 Open your browser at `http://localhost`.
 
 > nginx serves the static frontend files and proxies API requests to the Spring Boot backend.
+> When using Ollama, `docker compose` also starts the Ollama container. The first time it runs, it will pull the configured model — this may take a few minutes.
 
 ---
 
 ## Configuration
 
-All external URLs and the API key are configured in `src/main/resources/application.properties`:
+All external URLs and the API key are configured in `src/main/resources/application.properties`.
+
+### Using OpenAI
 
 ```properties
-# AI provider selection — swap value to switch provider
 app.ai.provider=openai
 app.ai.model=gpt-4.1
 app.ai.max-output-tokens=800
 app.ai.base-url=https://api.openai.com
 app.ai.api-key=${OPENAI_API_KEY}        # loaded from environment variable
+```
 
-# External weather and geocoding APIs
+### Using Ollama (default)
+
+```properties
+app.ai.provider=ollama
+app.ai.model=llama3.2
+app.ai.max-output-tokens=800
+app.ai.base-url=http://localhost:11434
+# no API key needed
+```
+
+### External APIs (shared)
+
+```properties
 external.api.weather.baseUrl=https://api.open-meteo.com/v1
 external.api.geocoding.baseUrl=https://geocoding-api.open-meteo.com/v1
 ```
