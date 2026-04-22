@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>ek.osnb</groupId>
-    <artifactId>openai-client-security-demo</artifactId>
+    <artifactId>chat-client-security-demo</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>openai-client-security-demo</name>
-    <description>openai-client-security-demo</description>
+    <name>chat-client-security-demo</name>
+    <description>chat-client-security-demo</description>
     <url/>
     <licenses>
         <license/>
