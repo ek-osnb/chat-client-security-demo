@@ -1,8 +1,0 @@
-###
-POST http://localhost:8080/api/prompt
-
-Content-Type: application/json
-
-{
-  "prompt": "What is the capital of France?"
-}
